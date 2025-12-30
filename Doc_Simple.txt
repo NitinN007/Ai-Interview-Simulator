@@ -1,0 +1,280 @@
+================================================================================
+                        AI INTERVIEW SIMULATOR
+                         SIMPLE EXPLANATION
+================================================================================
+
+
+WHAT IS THIS PROJECT?
+================================================================================
+It's a website where you can practice for job interviews.
+
+How it works:
+1. You tell the website what job you want (topic, job description, experience)
+2. AI creates 5 interview questions for you
+3. You record yourself answering on camera
+4. AI watches your video and gives you a score (0-100)
+5. AI gives feedback on how you did
+
+
+WHO USES IT?
+================================================================================
+- Job interview candidates preparing for technical roles
+- People practicing speaking skills
+- Anyone wanting AI feedback on interview performance
+
+
+SIMPLE FEATURES
+================================================================================
+
+1. Question Generator
+   → Type: React, Python, Data Science, etc.
+   → AI creates 5 custom questions for that topic
+
+2. Video Recording
+   → Click "Start Interview"
+   → Answer questions on camera
+   → Click "Stop" when done
+
+3. AI Scoring
+   → AI watches your video
+   → Gives score: 0-100
+   → Gives feedback: What you did well, what to improve
+
+4. See Results
+   → Your score displayed
+   → AI feedback message
+   → Video replay of your answers
+
+
+TECHNOLOGY USED
+================================================================================
+
+Frontend (What user sees):
+  - Next.js (React framework)
+  - Tailwind CSS (nice colors & design)
+  - Video recording from browser camera
+
+Backend (What runs on server):
+  - Next.js server
+  - Google Gemini AI (generates questions & analyzes video)
+  - PostgreSQL database (stores data)
+
+
+HOW IT WORKS (SIMPLE FLOW)
+================================================================================
+
+STEP 1: Create Interview
+  User enters:
+    - Topic: "React"
+    - Job: "Senior Frontend Developer"
+    - Experience: "3 years"
+  ↓
+  Website sends to AI: "Create 5 React interview questions"
+  ↓
+  AI returns: ["Q1: What is JSX?", "Q2: Explain hooks...", ...]
+  ↓
+  Questions show on page
+
+STEP 2: Record Video
+  User clicks "Start Interview"
+  ↓
+  Camera starts (user gives permission)
+  ↓
+  User answers questions on camera
+  ↓
+  User clicks "Stop Interview"
+  ↓
+  Video saved
+
+STEP 3: AI Analysis
+  Website sends video to AI
+  ↓
+  AI watches video (analyzes speaking, clarity, answers)
+  ↓
+  AI returns: { score: 85, feedback: "Good clarity, work on pace" }
+  ↓
+  Website shows score and feedback
+
+
+FILES & FOLDERS (SIMPLE)
+================================================================================
+
+app/
+├── api/
+│   ├── generate-questions/route.js   ← Creates questions with AI
+│   └── analyze-video/route.js        ← Analyzes video with AI
+├── dashboard/
+│   ├── _components/
+│   │   └── AddNewInterview.jsx       ← Interview setup form
+│   └── questions/page.jsx            ← Recording & results page
+
+That's the important stuff!
+
+
+KEY PROBLEMS SOLVED
+================================================================================
+
+Problem 1: AI code was breaking the website
+Solution: Moved AI code to backend only (not client side)
+
+Problem 2: AI response wasn't always JSON
+Solution: Added backup way to read AI response
+
+Problem 3: Couldn't send video over internet
+Solution: Convert video to text format (base64) before sending
+
+Problem 4: API quota limit (free tier)
+Solution: Need to enable billing on Google Cloud (cheap - pennies per test)
+
+
+HOW TO RUN IT
+================================================================================
+
+1. Download the code:
+   git clone https://github.com/NitinN007/Ai-Interview-Simulator.git
+
+2. Install dependencies:
+   npm install
+
+3. Get Google AI Key:
+   Go to https://aistudio.google.com/app/apikeys
+   Create new key
+   Copy it
+
+4. Create .env.local file with:
+   GEMINI_API_KEY=paste_your_key_here
+   NEXT_PUBLIC_GEMINI_API_KEY=paste_your_key_here
+   NEXT_PUBLIC_DRIZZLE_DB_URL=your_database_url
+
+5. Start website:
+   npm run dev
+
+6. Open in browser:
+   http://localhost:3001
+
+
+EXPLAINING TO INTERVIEWER
+================================================================================
+
+"I built an AI Interview Simulator. Here's what it does:
+
+Users enter their interview topic and background. The app uses Google's AI
+(Gemini) to generate 5 personalized interview questions. Then, users record
+themselves answering those questions on camera. The AI watches the video,
+analyzes their speaking clarity and confidence, gives a score from 0-100,
+and provides feedback.
+
+The backend uses Next.js server routes to safely call the AI (not from
+browser). The frontend is built with React and Tailwind CSS for a clean,
+responsive design.
+
+The main challenges I solved were:
+1. Moving AI calls to backend (server-only library)
+2. Handling video as base64 text for HTTP transmission
+3. Parsing AI responses with fallback logic
+
+The app works end-to-end: questions → recording → analysis → results."
+
+
+COSTS & REQUIREMENTS
+================================================================================
+
+Free Tier Google AI:
+  ❌ Very limited quota (runs out fast)
+  ✅ Good for testing with 1-2 videos
+
+Paid Tier (Recommended):
+  ✅ Unlimited quota
+  💰 Very cheap (~$0.075 per 1M tokens)
+  💰 1 test interview = less than 1 cent
+
+PostgreSQL Database:
+  - Free: Use Neon (serverless)
+  - Link: https://neon.tech
+
+
+FUTURE IDEAS
+================================================================================
+
+1. Save interview results per user
+2. Track score improvements over time
+3. Different interview types (behavioral, coding)
+4. Real human interviewer (via video call)
+5. More detailed AI feedback
+6. Mobile app version
+
+
+IMPORTANT FILES
+================================================================================
+
+app/api/generate-questions/route.js:
+  - What it does: Creates interview questions
+  - Input: topic, jobDescription, experience
+  - Output: array of 5 questions
+
+app/api/analyze-video/route.js:
+  - What it does: Analyzes video and gives score
+  - Input: base64 video
+  - Output: { score: 0-100, feedback: "string" }
+
+app/dashboard/_components/AddNewInterview.jsx:
+  - What it does: Interview setup form
+  - User enters: topic, job description, years of experience
+
+app/dashboard/questions/page.jsx:
+  - What it does: Recording page & results page
+  - Shows questions, records video, displays score & feedback
+
+
+TESTING IT
+================================================================================
+
+Test Case 1: Full Interview (Happy Path)
+  1. Go to /dashboard
+  2. Enter: Topic="React", Job="Frontend Dev", Experience="2"
+  3. Click "Start Interview"
+  4. Answer questions on camera (record 30 seconds)
+  5. Click "Stop Interview"
+  6. Should see score (80-100) + feedback + video
+
+Test Case 2: No Answer
+  1. Start recording
+  2. Don't say anything
+  3. Submit
+  4. Should see fallback score (60) + error message
+
+Test Case 3: Quota Exceeded
+  1. If AI quota exhausted
+  2. App shows error
+  3. FIX: Enable billing on Google Cloud
+
+
+GITHUB REPO
+================================================================================
+https://github.com/NitinN007/Ai-Interview-Simulator
+
+Code is live and ready to use!
+
+
+QUICK SUMMARY
+================================================================================
+
+What: AI Interview Practice Website
+How: Generate questions → Record answers → Get score & feedback
+Tech: Next.js + React + Google Gemini AI
+Cost: Free to test, very cheap to use ($0.07 per test with billing)
+Status: Complete and working ✅
+
+
+NEED HELP?
+================================================================================
+
+If quota error: Enable billing on Google Cloud Console
+If website won't start: Check .env.local has correct API key
+If video won't record: Check browser allows camera permission
+
+
+================================================================================
+                    End of Simple Documentation
+           AI Interview Simulator - Made Simple & Easy to Understand
+================================================================================
