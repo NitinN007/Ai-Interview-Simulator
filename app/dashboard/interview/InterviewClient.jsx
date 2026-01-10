@@ -72,7 +72,7 @@ export default function InterviewClient() {
       const genAI = new GoogleGenerativeAI(
         process.env.NEXT_PUBLIC_GEMINI_API_KEY
       );
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const prompt = `Evaluate this mock interview recording. Give a score out of 100. Each question contains 20 marks. Also check confidence, tone, and relevance. Respond only with a number.`;
 

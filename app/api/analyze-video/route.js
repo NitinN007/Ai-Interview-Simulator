@@ -71,7 +71,7 @@ export async function POST(req) {
       : base64Video;
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     // ✅ better prompt (forces raw JSON)
     const prompt = `
@@ -83,7 +83,7 @@ Do NOT wrap in triple backticks.
 JSON format:
 {"score":0,"feedback":"short constructive feedback"}
 
-Score should reflect speaking confidence, clarity, and relevance.
+Score should reflect mainly on correct answers and speaking confidence, clarity, and relevance.
 `.trim();
 
     // ✅ correct request format
