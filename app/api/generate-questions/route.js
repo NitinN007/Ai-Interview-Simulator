@@ -28,7 +28,7 @@ export async function POST(req) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `You are an interview question generator. Return a JSON array of 5 concise technical interview questions (strings) for the topic: "${topic}". Consider the job description: "${jobDescription}" and experience: ${experience}. Respond ONLY with a JSON array of strings, like ["Question 1?", "Question 2?", ...].`;
 

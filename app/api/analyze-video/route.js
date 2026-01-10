@@ -71,7 +71,7 @@ export async function POST(req) {
       : base64Video;
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // ✅ better prompt (forces raw JSON)
     const prompt = `
