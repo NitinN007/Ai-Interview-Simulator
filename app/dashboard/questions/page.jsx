@@ -1,87 +1,137 @@
 "use client";
+
 import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 
+/* ---------------- SAFE PARSER ---------------- */
+const parseQuestionsSafely = (raw) => {
+  if (!raw) return [];
+
+  let cleaned = raw;
+
+  // Remove markdown code blocks
+  cleaned = cleaned.replace(/```json/gi, "");
+  cleaned = cleaned.replace(/```/g, "");
+
+  // Remove numbered lines like "1. "
+  cleaned = cleaned.replace(/^\d+\.\s*/gm, "");
+
+  cleaned = cleaned.trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error("Question parsing failed:", e);
+    return [];
+  }
+};
+
 export default function QuestionsPage() {
   const searchParams = useSearchParams();
+
   const [questions, setQuestions] = useState([]);
   const [videoURL, setVideoURL] = useState(null);
   const [score, setScore] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const mediaRecorderRef = useRef(null);
   const videoRef = useRef(null);
   const chunksRef = useRef([]);
+  const streamRef = useRef(null);
 
+  /* ---------------- LOAD QUESTIONS ---------------- */
   useEffect(() => {
     const dataParam = searchParams.get("data");
-    if (dataParam) {
-      const data = JSON.parse(decodeURIComponent(dataParam));
-      setQuestions(data);
-    }
+    if (!dataParam) return;
+
+    const decoded = decodeURIComponent(dataParam);
+    const parsedQuestions = parseQuestionsSafely(decoded);
+
+    setQuestions(parsedQuestions);
   }, [searchParams]);
 
+  /* ---------------- CLEANUP ---------------- */
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      if (videoURL) URL.revokeObjectURL(videoURL);
+    };
+  }, [videoURL]);
+
+  /* ---------------- RECORDING ---------------- */
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
+
+      streamRef.current = stream;
       videoRef.current.srcObject = stream;
 
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported("video/webm")
+          ? "video/webm"
+          : "",
+      });
+
+      mediaRecorderRef.current = recorder;
       chunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (e) => {
+      recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
-        const videoURL = URL.createObjectURL(blob);
-        setVideoURL(videoURL);
-        analyzeVideoWithAI(blob);
-      };
+      recorder.onstop = handleStop;
 
-      mediaRecorder.start();
+      recorder.start();
       setRecording(true);
-    } catch (error) {
-      console.error("Error accessing camera:", error);
-      alert("Unable to access camera or microphone. Please check permissions.");
+    } catch (err) {
+      alert("Camera or microphone permission denied.");
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && recording) {
-      mediaRecorderRef.current.stop();
-      setRecording(false);
-    }
+    if (!mediaRecorderRef.current) return;
+    mediaRecorderRef.current.stop();
+    setRecording(false);
   };
 
-  const analyzeVideoWithAI = async (blob) => {
+  const handleStop = async () => {
+    const blob = new Blob(chunksRef.current, { type: "video/webm" });
+
+    if (videoURL) URL.revokeObjectURL(videoURL);
+    const url = URL.createObjectURL(blob);
+    setVideoURL(url);
+
+    analyzeVideo(blob);
+  };
+
+  /* ---------------- AI ANALYSIS ---------------- */
+  const analyzeVideo = async (blob) => {
     setLoading(true);
     setScore(null);
     setFeedback(null);
+
     try {
       const base64Video = await blobToBase64(blob);
+
       const res = await fetch("/api/analyze-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ base64Video }),
       });
 
-      if (!res.ok) {
-        throw new Error("AI analysis failed");
-      }
-
       const data = await res.json();
-      setScore(data.score || 0);
-      setFeedback(data.feedback || null);
-    } catch (error) {
-      console.error("AI analysis error:", error);
-      setScore(Math.floor(Math.random() * 41) + 60);
+      setScore(data.score ?? 0);
+      setFeedback(data.feedback ?? "Good attempt. Keep practicing.");
+    } catch {
+      setScore(0);
       setFeedback("AI analysis failed. Try again.");
     } finally {
       setLoading(false);
@@ -96,93 +146,62 @@ export default function QuestionsPage() {
       reader.readAsDataURL(blob);
     });
 
+  /* ---------------- UI ---------------- */
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-8 flex flex-col items-center">
-      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-8 transition-all">
-        <h2 className="text-3xl font-extrabold text-center mb-6 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
-          Interview Questions
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 p-8 flex justify-center">
+      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-8">
+
+        <h2 className="text-3xl font-bold text-center mb-6 text-indigo-600">
+          AI Mock Interview
         </h2>
 
-        <ul className="mb-8 space-y-3">
-          {questions.map((q, idx) => (
-            <li
-              key={idx}
-              className="border border-gray-200 p-4 rounded-lg shadow-sm bg-gray-50 hover:bg-gray-100 transition-all"
-            >
-              <span className="font-semibold text-indigo-700">{idx + 1}.</span>{" "}
+        <ul className="space-y-3 mb-6">
+          {questions.map((q, i) => (
+            <li key={i} className="bg-gray-50 p-4 rounded-lg border">
+              <span className="font-semibold text-indigo-600">{i + 1}.</span>{" "}
               {q}
             </li>
           ))}
         </ul>
 
-        {/* Hidden video (records but not visible) */}
         <video ref={videoRef} autoPlay muted className="hidden" />
 
-        <div className="flex justify-center gap-6 mt-6">
+        <div className="flex justify-center gap-6">
           {!recording ? (
             <button
               onClick={startRecording}
-              className="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-green-600 transition-all"
+              className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold"
             >
               🎥 Start Interview
             </button>
           ) : (
             <button
               onClick={stopRecording}
-              className="bg-red-500 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-red-600 transition-all"
+              className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold"
             >
               ⏹ Submit Interview
             </button>
           )}
         </div>
 
-        {/* Loading Spinner */}
         {loading && (
-          <div className="flex flex-col items-center mt-10">
-            <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-4 text-gray-600 font-medium">
-              Analyzing your responses with AI...
-            </p>
+          <div className="text-center mt-6">
+            <div className="w-8 h-8 mx-auto border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-3 text-gray-600">Analyzing with AI…</p>
           </div>
         )}
 
-        {/* AI Score Result */}
         {!loading && score !== null && (
-          <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-100 border border-indigo-200 p-6 rounded-xl shadow-inner text-center transition-all">
-            <h3 className="text-2xl font-semibold text-gray-800 mb-2">
-              Your AI Evaluation Score
-            </h3>
-            <p className="text-4xl font-extrabold text-indigo-600">
-              {score}/100
-            </p>
-            <p className="text-gray-600 mt-2">
-              {feedback
-                ? feedback
-                : score > 85
-                ? "🌟 Excellent! You spoke confidently and clearly."
-                : score > 70
-                ? "👍 Good effort! Keep improving your clarity and tone."
-                : "💡 Keep practicing — try to answer all questions next time."}
-            </p>
-
-            {feedback && (
-              <div className="mt-4 text-left bg-white/60 p-3 rounded-lg border border-indigo-100">
-                <strong className="text-gray-800">Detailed Feedback:</strong>
-                <p className="text-sm text-gray-700 mt-1">{feedback}</p>
-              </div>
-            )}
+          <div className="mt-8 bg-indigo-50 p-6 rounded-xl text-center">
+            <h3 className="text-xl font-semibold">AI Score</h3>
+            <p className="text-4xl font-bold text-indigo-600">{score}/100</p>
+            <p className="mt-2 text-gray-700">{feedback}</p>
           </div>
         )}
 
-        {/* Show small recorded video preview */}
         {videoURL && (
-          <div className="flex justify-center mt-8">
-            <video
-              controls
-              src={videoURL}
-              className="rounded-lg shadow-lg border border-gray-200"
-              style={{ width: "240px", borderRadius: "12px" }}
-            />
+          <div className="flex justify-center mt-6">
+            <video src={videoURL} controls className="rounded-lg w-60" />
           </div>
         )}
       </div>
