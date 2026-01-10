@@ -6,7 +6,7 @@
 
 WHAT IS THIS PROJECT?
 ================================================================================
-It's a website where you can practice for job interviews.
+
 
 How it works:
 1. You tell the website what job you want (topic, job description, experience)
