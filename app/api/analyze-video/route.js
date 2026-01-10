@@ -1,21 +1,26 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+const MAX_BASE64_MB = 8; // ✅ increase/decrease based on Vercel limits
+const MAX_RETRIES = 3;
+
 // ✅ retry wrapper
-async function callGeminiWithRetry(fn, maxRetries = 3) {
+async function callGeminiWithRetry(fn, maxRetries = MAX_RETRIES) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (err) {
+      const msg = String(err?.message || "");
       const isRateLimited =
         err?.status === 429 ||
         err?.statusCode === 429 ||
-        String(err?.message || "").includes("429");
+        msg.includes("429") ||
+        msg.toLowerCase().includes("rate");
 
       if (isRateLimited && attempt < maxRetries) {
         const delay = Math.pow(2, attempt - 1) * 1000;
         console.log(
-          `Rate limited. Retrying in ${delay}ms... (attempt ${attempt}/${maxRetries})`
+          `Rate limited. Retrying in ${delay}ms... (${attempt}/${maxRetries})`
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
@@ -30,13 +35,10 @@ function extractJson(text) {
   if (!text) return null;
 
   let cleaned = text.trim();
-
-  // remove markdown fences
   cleaned = cleaned.replace(/```json/gi, "");
   cleaned = cleaned.replace(/```/g, "");
   cleaned = cleaned.trim();
 
-  // extract first JSON {...}
   const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) return null;
 
@@ -47,15 +49,23 @@ function extractJson(text) {
   }
 }
 
+// ✅ estimate base64 size
+function estimateBase64SizeMB(base64) {
+  // base64 size ≈ (length * 3/4) bytes
+  const bytes = Math.floor((base64.length * 3) / 4);
+  return bytes / (1024 * 1024);
+}
+
 export async function POST(req) {
   try {
     const { base64Video = "" } = await req.json();
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return new NextResponse("Missing GEMINI_API_KEY in environment", {
-        status: 400,
-      });
+      return NextResponse.json(
+        { error: "Missing GEMINI_API_KEY in environment" },
+        { status: 400 }
+      );
     }
 
     if (!base64Video) {
@@ -70,23 +80,35 @@ export async function POST(req) {
       ? base64Video.split("base64,")[1]
       : base64Video;
 
+    // ✅ reject big payload early (prevents Vercel crash)
+    const sizeMB = estimateBase64SizeMB(cleanedBase64);
+    if (sizeMB > MAX_BASE64_MB) {
+      return NextResponse.json(
+        {
+          error: "Video too large",
+          message: `Your video is ~${sizeMB.toFixed(
+            2
+          )} MB. Please record a shorter / lower quality video (max ${MAX_BASE64_MB} MB).`,
+        },
+        { status: 413 }
+      );
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // ✅ better prompt (forces raw JSON)
     const prompt = `
 You are an interview evaluator.
 Analyze the provided video and return ONLY raw JSON.
 Do NOT use markdown.
 Do NOT wrap in triple backticks.
 
-JSON format:
+Return format:
 {"score":0,"feedback":"short constructive feedback"}
 
-Score should reflect mainly on correct answers and speaking confidence, clarity, and relevance.
+Score should reflect correct answers and speaking confidence, clarity, and relevance.
 `.trim();
 
-    // ✅ correct request format
     const result = await callGeminiWithRetry(() =>
       model.generateContent({
         contents: [
@@ -108,9 +130,7 @@ Score should reflect mainly on correct answers and speaking confidence, clarity,
 
     const raw = result.response.text();
 
-    // ✅ robust JSON extraction
     const parsed = extractJson(raw);
-
     if (parsed && typeof parsed.score !== "undefined") {
       return NextResponse.json({
         score: Math.min(100, Math.max(0, Number(parsed.score) || 0)),
@@ -126,8 +146,14 @@ Score should reflect mainly on correct answers and speaking confidence, clarity,
     return NextResponse.json({ score, feedback });
   } catch (err) {
     console.error("/api/analyze-video error:", err);
-    return new NextResponse(String(err?.message || "Server error"), {
-      status: 500,
-    });
+
+    // ✅ return clean JSON error always
+    return NextResponse.json(
+      {
+        error: "AI analysis failed",
+        message: String(err?.message || "Server error"),
+      },
+      { status: 500 }
+    );
   }
 }
